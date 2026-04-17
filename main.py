@@ -221,9 +221,10 @@ def report_bond_at(ledger: list, bond_id: str, event_id: int) -> None:
     label = f"Event {rec['event_id']}" if rec["event_id"] < event_id else f"Event {rec['event_id']} (latest)"
     print(f"\n--- Bond '{bond_id}' — {label} ---")
     print_table(
-        ["BondID", "Position", "Dirty Price", "PV", "PV Change"],
+        ["BondID", "Position", "Clean Price", "Dirty Price", "PV", "PV Change"],
         [[rec["bond_id"], rec["position"],
-          f"{rec['dirty_price']:.4f}", f"{rec['pv']:.2f}", f"{rec['pv_change']:.2f}"]],
+          f"{rec['clean_price']:.4f}", f"{rec['dirty_price']:.4f}",
+          f"{rec['pv']:.2f}", f"{rec['pv_change']:.2f}"]],
     )
 
 
@@ -261,8 +262,8 @@ def report_trader_at(ledger: list, event_id: int) -> None:
 
 HELP_TEXT = """
 Commands:
-  bond <BOND_ID>                 position / dirty price / PV for a bond (latest state)
-  bond <BOND_ID> at <EVENT_ID>   position / dirty price / PV for a bond as of a specific event
+  bond <BOND_ID>                 position / clean price / dirty price / PV for a bond (latest state)
+  bond <BOND_ID> at <EVENT_ID>   position / clean price / dirty price / PV for a bond as of a specific event
   desk                           total PV per desk (latest state)
   desk at <EVENT_ID>             total PV per desk as of a specific event
   trader                         total PV per trader (latest state)
