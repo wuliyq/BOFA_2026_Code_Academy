@@ -216,9 +216,10 @@ def print_table(headers: list, rows: list) -> None:
 def report_bond_at(ledger: list, bond_id: str, event_id: int) -> None:
     rec = query_bond_at(ledger, bond_id, event_id)
     if not rec:
-        print(f"  [!] No data for bond '{bond_id}' at or before event {event_id}.")
+        print(f"  No events found for bond '{bond_id}'.")
         return
-    print(f"\n--- Bond '{bond_id}' at Event {event_id} ---")
+    label = f"Event {rec['event_id']}" if rec["event_id"] < event_id else f"Event {rec['event_id']} (latest)"
+    print(f"\n--- Bond '{bond_id}' — {label} ---")
     print_table(
         ["BondID", "Position", "Dirty Price", "PV", "PV Change"],
         [[rec["bond_id"], rec["position"],
@@ -229,9 +230,11 @@ def report_bond_at(ledger: list, bond_id: str, event_id: int) -> None:
 def report_desk_at(ledger: list, event_id: int) -> None:
     desk_pvs = query_desk_at(ledger, event_id)
     if not desk_pvs:
-        print(f"  [!] No desk data at or before event {event_id}.")
+        print("  No events found.")
         return
-    print(f"\n--- Total PV by Desk at Event {event_id} ---")
+    latest = max(r["event_id"] for r in ledger if r["event_id"] <= event_id)
+    label = f"Event {latest}" if latest < event_id else f"Event {latest} (latest)"
+    print(f"\n--- Total PV by Desk — {label} ---")
     print_table(
         ["Desk", "Total PV"],
         [[desk, f"{pv:.2f}"] for desk, pv in sorted(desk_pvs.items())],
@@ -241,9 +244,11 @@ def report_desk_at(ledger: list, event_id: int) -> None:
 def report_trader_at(ledger: list, event_id: int) -> None:
     trader_pvs = query_trader_at(ledger, event_id)
     if not trader_pvs:
-        print(f"  [!] No trader data at or before event {event_id}.")
+        print("  No events found.")
         return
-    print(f"\n--- Total PV by Trader at Event {event_id} ---")
+    latest = max(r["event_id"] for r in ledger if r["event_id"] <= event_id)
+    label = f"Event {latest}" if latest < event_id else f"Event {latest} (latest)"
+    print(f"\n--- Total PV by Trader — {label} ---")
     print_table(
         ["Trader", "Total PV"],
         [[trader, f"{pv:.2f}"] for trader, pv in sorted(trader_pvs.items())],
@@ -256,9 +261,12 @@ def report_trader_at(ledger: list, event_id: int) -> None:
 
 HELP_TEXT = """
 Commands:
-  bond <BOND_ID> at <EVENT_ID>   position / dirty price / PV for a bond as of an event
-  desk at <EVENT_ID>             total PV per desk as of an event
-  trader at <EVENT_ID>           total PV per trader as of an event
+  bond <BOND_ID>                 position / dirty price / PV for a bond (latest state)
+  bond <BOND_ID> at <EVENT_ID>   position / dirty price / PV for a bond as of a specific event
+  desk                           total PV per desk (latest state)
+  desk at <EVENT_ID>             total PV per desk as of a specific event
+  trader                         total PV per trader (latest state)
+  trader at <EVENT_ID>           total PV per trader as of a specific event
   help                           show this message
   exit | quit                    quit
 """
@@ -287,25 +295,32 @@ def parse_and_execute(raw: str, ledger: list) -> bool:
         print(HELP_TEXT)
 
     elif cmd == "bond":
-        # Expected: bond <BOND_ID> at <EVENT_ID>
-        if len(parts) != 4 or parts[2].lower() != "at" or not parts[3].isdigit():
-            print("  Usage: bond <BOND_ID> at <EVENT_ID>")
-        else:
+        # bond <BOND_ID>  OR  bond <BOND_ID> at <EVENT_ID>
+        latest = ledger[-1]["event_id"]
+        if len(parts) == 2:
+            report_bond_at(ledger, parts[1].upper(), latest)
+        elif len(parts) == 4 and parts[2].lower() == "at" and parts[3].isdigit():
             report_bond_at(ledger, parts[1].upper(), int(parts[3]))
+        else:
+            print("  Please follow the command format: bond <BOND_ID>  or  bond <BOND_ID> at <EVENT_ID>")
 
     elif cmd in ("desk", "trader"):
-        # Expected: desk at <EVENT_ID>  /  trader at <EVENT_ID>
-        if len(parts) != 3 or parts[1].lower() != "at" or not parts[2].isdigit():
-            print(f"  Usage: {cmd} at <EVENT_ID>")
-        else:
+        # desk  OR  desk at <EVENT_ID>  (same for trader)
+        latest = ledger[-1]["event_id"]
+        if len(parts) == 1:
+            event_id = latest
+        elif len(parts) == 3 and parts[1].lower() == "at" and parts[2].isdigit():
             event_id = int(parts[2])
-            if cmd == "desk":
-                report_desk_at(ledger, event_id)
-            else:
-                report_trader_at(ledger, event_id)
+        else:
+            print(f"  Please follow the command format: {cmd}  or  {cmd} at <EVENT_ID>")
+            return True
+        if cmd == "desk":
+            report_desk_at(ledger, event_id)
+        else:
+            report_trader_at(ledger, event_id)
 
     else:
-        print(f"  [!] Unknown command '{cmd}'. Type 'help' for available commands.")
+        print(f"  Unknown command '{cmd}'. Type 'help' to see available commands.")
 
     return True
 
