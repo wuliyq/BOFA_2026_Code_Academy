@@ -215,9 +215,7 @@ def print_table(headers: list, rows: list) -> None:
 
 def report_bond_at(ledger: list, bond_id: str, event_id: int) -> None:
     rec = query_bond_at(ledger, bond_id, event_id)
-    if not rec:
-        print(f"  No events found for bond '{bond_id}'.")
-        return
+    assert rec is not None  # caller must validate before calling this function
     label = f"Event {rec['event_id']}" if rec["event_id"] < event_id else f"Event {rec['event_id']} (latest)"
     print(f"\n--- Bond '{bond_id}' — {label} ---")
     print_table(
@@ -272,7 +270,7 @@ Commands:
   exit | quit                    quit
 """
 
-def parse_and_execute(raw: str, ledger: list) -> bool:
+def parse_and_execute(raw: str, ledger: list, bonds: dict) -> bool:
     """
     Parse a command string and execute the matching report.
     Returns False if the user wants to exit, True otherwise.
@@ -297,13 +295,32 @@ def parse_and_execute(raw: str, ledger: list) -> bool:
 
     elif cmd == "bond":
         # bond <BOND_ID>  OR  bond <BOND_ID> at <EVENT_ID>
-        latest = ledger[-1]["event_id"]
+        bond_id: str = ""
+        event_id: int = ledger[-1]["event_id"]
         if len(parts) == 2:
-            report_bond_at(ledger, parts[1].upper(), latest)
+            bond_id = parts[1].upper()
         elif len(parts) == 4 and parts[2].lower() == "at" and parts[3].isdigit():
-            report_bond_at(ledger, parts[1].upper(), int(parts[3]))
+            bond_id, event_id = parts[1].upper(), int(parts[3])
         else:
             print("  Please follow the command format: bond <BOND_ID>  or  bond <BOND_ID> at <EVENT_ID>")
+            return True
+
+        # Stage 1: is the bond ID valid?
+        if bond_id not in bonds:
+            valid = ", ".join(sorted(bonds.keys()))
+            print(f"  Bond '{bond_id}' does not exist. Valid bonds: {valid}")
+            return True
+
+        # Stage 2: does this bond have any trades up to the requested event?
+        if not any(r["bond_id"] == bond_id and r["event_id"] <= event_id for r in ledger):
+            first_trade = next((r["event_id"] for r in ledger if r["bond_id"] == bond_id), None)
+            if first_trade is None:
+                print(f"  Bond '{bond_id}' has no trades in the dataset.")
+            else:
+                print(f"  Bond '{bond_id}' has no trades at or before Event {event_id}. First trade is at Event {first_trade}.")
+            return True
+
+        report_bond_at(ledger, bond_id, event_id)
 
     elif cmd in ("desk", "trader"):
         # desk  OR  desk at <EVENT_ID>  (same for trader)
@@ -351,7 +368,7 @@ def main():
             print("\n  Goodbye.")
             break
 
-        if not parse_and_execute(raw, ledger):
+        if not parse_and_execute(raw, ledger, bonds):
             break
 
 
