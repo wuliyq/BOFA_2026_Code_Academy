@@ -75,7 +75,8 @@ def process_all_events(bonds: dict, events: list):
         bond_id = event["bond_id"]
         bond = bonds[bond_id]
 
-        ai = calc_accrued_interest(bond["coupon"], bond["months_since_coupon"])
+        # 1. Accrued interest & dirty price
+        ai = calc_accrued_interest(bond["coupon"], bond["months_since_coupon"], bond["frequency"])
         dirty = calc_dirty_price(event["clean_price"], ai)
         latest_dirty[bond_id] = dirty
 
